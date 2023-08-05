@@ -1,0 +1,163 @@
+---
+title: "Data Analysis of 2022 MLB Hitting and Pitching Statistics"
+author: "Marc Eidelhoch & Piper Dean"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+
+\
+\
+**Research Questions: What separates the MLB's top hitters and pitchers? How do the number of strikeouts and hits vary by position in the MLB's top players? Which top pitchers threw the most strikeouts and walks in 2022?**\
+\
+\
+Baseball is a sport that is driven by statistics. Data is collected on every aspect of the game and each player has countless statistics that attempt to quantify their productivity. These statistics are used by team executives, coaches and fans to make decisions ranging from what players to sign to the team or trade for, who to start in an important game or which team or player to bet on.  As avid sports fans, analyzing baseball data seemed like a natural choice. We focused our analysis on the players who played in the 2022 Major League Baseball (MLB) season. The goal of this analysis is to determine what separates the MLB's top players from one another. Specifically, we examined the number of hits and strikeouts for the top 25 hitters and the number of walks and strikeouts for the top 25 pitchers in the 2022 season.\
+\
+The data used in the analysis was scraped from the website Baseball Reference which is commonly used for baseball statistics and history. For the purpose of the analysis, hitters who had less than 25 plate appearances or less than 10 games played were removed as we wanted to focus on the top players. Similarly, pitchers with less than 10 innings pitched or less than 7 game appearances were also removed. For both sets of data, the top 25 hitters (sorted by most hits) and pitchers (sorted by most innings pitched) were selected to be used in the data analysis.\
+\
+The first plot illustrates the top MLB hitters in 2022. The most efficient hitters will fall in the bottom right quadrant of the graph as they have the most hits with the fewest number of strikeouts. Freddie Freeman of the LA Dodger led the league with 199 hits, however Luiz Arraez of the Minnesota Twins had the fewest strikeouts of these elite batters. Of the 25 batters displayed, eight of them received post season All-MLB honors and both the American League MVP (Aaron Judge) and National League MVP (Paul Goldschmidt) are featured on the graph. Furthermore, the graph is colored by position. Shortstop, first base and third base each have six of the top 25 individuals playing that position. Individuals who play first base, third base or shortstop account for 72% of the top hitters in the MLB.\
+\
+The second plot focuses on 25 of the MLB's top starting pitchers in 2022. The most efficient pitchers will fall in the top left quadrant as they have the most strikeouts and the fewest walks. Gerrit Cole of the New York Yankees pitched the most strikeouts at 250 and Aaron Nola pitched the fewest number of walks at 29 for the Philadelphia Phillies. In the postseason awards, 8 of the 10 all MLB Team starting pitchers are featured on the graph. Furthermore, the National League Cy Young Award winner, Sandy Alcantara, is displayed. Another key statistic featured in this display is the pitcher's wins and losses. When hovering over a point, the wins and losses are displayed. Zac Gallen had the fewest losses at 4 while Framber Valdez had the most wins at 17. While wins and losses are more indicative of the team's complete performance, it is still important to note which pitchers have the most successful records.\
+\
+While this data analysis examined a collection of the MLB's top players, it only scratched the surface of baseball analytics. For both pitchers and hitters, a plethora of statistics are calculated to determine what players are the most successful. Examining statistics like batting average, on base percentage and earned run average could be insightful in making conclusions about who the top baseball players are. Furthermore, the decision to select the "top" players by number of hits and number of innings pitched is subjective and using a different statistic would yield different results. Ultimately, top hitters will get more hits and less strikeouts while top pitchers will get more strikeouts and less walks.\
+\
+\
+\
+
+
+
+
+
+```{r setup, include=FALSE}
+# Packages
+knitr::opts_chunk$set(collapse = TRUE, prompt = TRUE, comment = NULL, message = FALSE, include = TRUE, warning = FALSE)
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(ggthemes)
+theme_set(theme_stata(base_size = 10)) # for nice looking plots
+library(rvest)
+library(tidytext)
+library(tidyr)
+library(purrr)
+library(polite)
+library(tidytext)
+library(plotly)
+library(janitor)
+```
+
+
+```{r, echo = FALSE, eval = FALSE}
+# r chunk to bring in all of the data from the different webpages
+url_part_1 <- "https://www.baseball-reference.com/teams/"
+url_part_2 <- "/2022.shtml"
+
+# vector to index through
+teams <- c("ARI", "ATL", "BAL", "BOS", "CHC", "CHW", "CIN", "CLE", "COL", "DET", "HOU", "KCR", "LAA", "LAD", "MIA", "MIL", "MIN", "NYM", "NYY", "OAK", "PHI", "PIT", "SDP", "SFG", "SEA", "STL", "TBR", "TEX", "TOR", "WSN")
+
+# functions for reading through pages of tables - Great job!
+pull_data_hitter <- function(team_name) {
+  url_to_use <- str_glue({url_part_1}, {team_name}, {url_part_2})
+  data_to_use <- read_html(url_to_use) %>%
+    html_nodes(css = "#team_batting") %>%
+    html_table()
+  tibble_hitters <- data_to_use[[1]] %>%
+    mutate(team = team_name) %>%
+    filter(Pos != "Pos")
+}
+
+pull_data_pitcher <- function(team_name) {
+  url_to_use <- str_glue({url_part_1}, {team_name}, {url_part_2})
+  data_to_use <- read_html(url_to_use) %>%
+    html_nodes(css = "#team_pitching") %>%
+    html_table()
+  tibble_pitchers <- data_to_use[[1]] %>%
+    mutate(team = team_name) %>%
+    filter(Pos != "Pos")
+}
+
+# uses map and the function we wrote to pull in data from every team
+all_data_hitting <- map(teams, .f = pull_data_hitter)
+all_data_pitching <- map(teams, .f = pull_data_pitcher)
+
+
+all_data_hitting <- do.call(rbind, all_data_hitting)
+all_data_pitching <- do.call(rbind, all_data_pitching)
+
+# write into CSV (so we don't have to web scrape every time and can avoid 429 error)
+write_csv(all_data_hitting, "all_batter_data.csv")
+write_csv(all_data_pitching, "all_pitching_data.csv")
+```
+
+
+```{r, echo = FALSE}
+# r chunk to clean the data
+# read data from CSV
+csv_hitting_data <- read_csv("all_batter_data.csv")
+csv_pitching_data <- read_csv("all_pitching_data.csv")
+
+# changes column names
+cleaned_data_hitters <- csv_hitting_data %>%
+  janitor::clean_names() %>%
+  rename("position" = "pos", "games" = "g", "plate_appearances" = "pa", "at_bats" = "ab", "runs" = "r", "hits" = "h", "doubles" = "x2b", "triples" = "x3b", "home_runs" = "hr", "stolen_base" = "sb", "caught_stealing" = "cs", "walks" = "bb", "strike_outs" = "so", "batting_average" = "ba", "on_base_percentage" = "obp", "slugging" = "slg", "OPS" = "ops", "OPS+" = "ops_2", "total_bases" = "tb", "double_plays" = "gdp", "hit_by_pitch" = "hbp", "sacrifice_bunts" = "sh", "sacrifice_flies" = "sf", "intentional_walks" = "ibb")
+
+cleaned_data_pitchers <- csv_pitching_data %>%
+  janitor::clean_names() %>%
+  rename("position" = "pos", "wins" = "w", "losses" = "l", "win_loss_percentage" = "w_l_percent", "ERA" = "era", "games" = "g", "games_started" = "gs", "games_finished" = "gf", "complete_game" = "cg", "shut_out" = "sho", "save" = "sv", "innings_pitched" = "ip", "hits_allowed" = "h", "runs_allowed" = "r", "earned_runs" = "er", "home_runs_allowed" = "hr", "walks" = "bb", "intentional_walks" = "ibb", "strike_outs" = "so", "hit_by_pitch" = "hbp", "balks" = "bk", "wild_pitches" = "wp", "batters_faced" = "bf", "ERA+" = "era_2", "fielding_independent_pitching" = "fip", "walks_hits_per_innings_pitched" = "whip", "hits_per_nine_innings" = "h9", "home_runs_per_nine_innings" = "hr9", "walks_per_nine_innings" = "bb9", "strike_outs_per_nine_innings" = "so9", "strike_outs_per_walk" = "so_w")
+
+# removes the weird rows that came in with the data and gets rid of the rank column
+cleaned_data_hitters <- cleaned_data_hitters %>%
+  relocate(team, .before = position) %>%
+  filter(!is.na(rk)) %>%
+  select(2:ncol(cleaned_data_hitters))
+
+cleaned_data_pitchers <- cleaned_data_pitchers %>%
+  relocate(team, .before = position) %>%
+  filter(!is.na(rk)) %>%
+  select(2:ncol(cleaned_data_pitchers))
+
+# removes the switch hitter (#) and left handed (*) indicators on the names
+cleaned_data_hitters <- cleaned_data_hitters %>% mutate(name = str_replace_all(name, "[//#//*]$", ""))
+
+cleaned_data_pitchers <- cleaned_data_pitchers %>% mutate(name = str_replace_all(name, "[//#//*]$", ""))
+
+# adds a type for pitchers with no type that is just "P"
+cleaned_data_pitchers <- cleaned_data_pitchers %>% mutate(position = replace_na(position, "P"))
+
+# decided that we only want to use hitters that have had at least 25 plate appearances and have appeared in at least 10 games and pitchers that have appeared in at least 7 games and have at least 10 innings pitched.
+cleaned_data_hitters_qualifying <- cleaned_data_hitters %>% filter(plate_appearances > 25, games > 10)
+
+cleaned_data_pitchers_qualifying <- cleaned_data_pitchers %>% filter(games > 7, innings_pitched > 10)
+```
+
+
+
+```{r, echo = FALSE}
+# Plots for use
+plot_1_data <- cleaned_data_hitters_qualifying %>%
+  group_by(name) %>%
+  arrange(desc(hits)) %>%
+  ungroup() %>%
+  slice(1:25)
+
+hits_strike_outs_plot <- ggplot(data = plot_1_data, mapping = aes(x = hits, y = strike_outs, color = position, label = name, text = paste("team: ", team))) +
+  geom_point() +
+  labs(title = "Hits vs Strikeouts of The Top 25 MLB Hitters in 2022", x = "Hits", y = "Strikeouts")
+
+# Plot 1
+ggplotly(hits_strike_outs_plot)
+
+plot_pitchers <- cleaned_data_pitchers_qualifying %>%
+  group_by(name) %>%
+  arrange(desc(innings_pitched)) %>%
+  ungroup() %>%
+  slice(1:25)
+
+pitchers_plot <- ggplot(plot_pitchers, mapping = aes(x = walks, y = strike_outs, label = name, text = paste("wins: ", wins, "\n", "losses: ", losses, "\n", "team: ", team, "\n", sep = ""))) +
+  geom_point() +
+  labs(title = "Walks vs Strikeouts of The Top 25 MLB Pitchers in 2022", x = "Walks", y = "Strikeouts")
+
+# Plot2
+ggplotly(pitchers_plot)
+```
